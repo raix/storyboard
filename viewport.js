@@ -247,7 +247,7 @@ ViewPort = function(viewportId, defaultTemp) {
 
 Template.screen.Session = function(name) {
   // If source then return the template else return null
-  console.log(this.id, 'Session', name);
+  // XXX: Bugger this cant be passed down... we mount it directly
   return ViewPort(this.id).Session(name);
 };
 
@@ -275,6 +275,10 @@ Template.screen.showcontent = function() {
   var source = screen.show.get();
 
   if (source) {
+    if (source && Template[source] && !Template[source].Session) {
+      // If template dont have a Session helper we add one
+      Template[source].Session = Template.screen.Session;
+    }
     // Show the template
     screen.temp.set(source && Template[source] || null);
     return screen.inTo;
