@@ -50,13 +50,13 @@ _viewportEvents = function(tempName, events) {
   var self = this;
   if (typeof events === 'undefined') {
 
-    if (tempName === ''+tempName) {
+    if (tempName === ''+tempName || tempName === null) {
       // TempName is string 
       // We act as a getter
-      return self._events[tempName];
+      return self._events[tempName] || {};
     } else {
       // TempName must be the master / empty viewport events...
-      self._events[null] = _.extend(self._events[null] || {}, tempName);
+      _viewportEvents.call(self, null, tempName);
     }
 
   } else if (events === null) {
@@ -76,7 +76,9 @@ _emitEvent = function(name /* params */) {
   var self = this;
   var args = Array.prototype.slice.call(arguments);
   var name = args.shift();
-  var f = self._activeEvents[name];
+
+  var f =  self._activeEvents[name] || self.events(null)[name];
+
   if (typeof f === 'function') {
     // Looks like we have a function
     f.apply(self, args);
@@ -243,29 +245,10 @@ ViewPort = function(viewportId, defaultTemp) {
 
 };
 
-_merge = function(sep /*, strings to merge */) {
-  var result = [];
-
-  for (var i = 1; i < arguments.length; i++) {
-    if (arguments[i]) result.push(arguments[i]);
-  }
-  return (result.length) ? result.join(sep) : null;
-};
-
-_mergeObjects = function(/* objects */) {
-  var result = {
-    'style': [''],
-    'class': [' ']
-  };
-  for (var i = 0; i < arguments.length; i++) {
-    result['class'].push(arguments[i]['class']);
-    result['style'].push(arguments[i]['style']);
-  }
-
-  return {
-    'style': _merge.apply({}, result['style']),
-    'class': _merge.apply({}, result['class'])
-  };
+Template.screen.Session = function(name) {
+  // If source then return the template else return null
+  console.log(this.id, 'Session', name);
+  return ViewPort(this.id).Session(name);
 };
 
 Template.screen.content = function() {
