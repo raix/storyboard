@@ -1,10 +1,10 @@
 <template name="viewport">
-  {{> screen name="a" id=id class=class}}
+  {{> screen name="a" id=id class=class defaultTemp=default}}
   {{> screen name="b" id=id class=class}}
 </template>
 
 <template name="screen">
-  <div class="{{class}} {{showcontent id name}}">
-    {{> content id=id name=name}}
+  <div class="{{class}} {{showcontent}}" style="{{showlayer}}">
+    {{> content}}
   </div>
 </template>
