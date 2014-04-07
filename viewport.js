@@ -245,6 +245,29 @@ ViewPort = function(viewportId, defaultTemp) {
 
 };
 
+ViewPort.emit = function() {
+  var self = this;
+  var args = Array.prototype.slice.call(arguments);
+  var name = args.shift();
+
+  _.each(_viewports, function(vp, viewportName) {
+
+    var f =  vp._activeEvents[name] || vp.events(null)[name];
+
+    if (typeof f === 'function') {
+      // Looks like we have a function
+      try {
+        f.apply(vp, args);
+      } catch(err) {
+        console.error('ViewPort.emit failed to call "' + name +
+                '" event handler on viewport "' + viewportName +
+                '", Error: ' + err.message);
+      }
+    }  
+
+  });
+};
+
 Template.screen.Session = function(name) {
   // If source then return the template else return null
   // XXX: Bugger this cant be passed down... we mount it directly
