@@ -19,6 +19,15 @@ var _reactiveEntity = function(defaultValue) {
 
 var _viewports = {};
 
+var transition = function(value) {
+  if (!value) return '';
+
+  return '-webkit-transition: ' + value + ';' +
+  '-moz-transition: ' + value + ';' +
+  '-o-transition: ' + value + ';' +
+  'transition: ' + value + ';';
+};
+
 UI.registerHelper('ViewPort', {
   on: function(id, tempName, result) {
     var current = ViewPort(id).current.get();
@@ -108,51 +117,83 @@ _sessionToggle = function(name, value) {
   }
 };
 
-_goTo = function(tempName, settings) {
-  // Test if current is a or b
-  var self = this;
-
-  var options = _.extend({
+_defaultTransition = function(options) {
+  return _.extend({
     // Toggle eg. if the template is already displayed it will be hidden
     toggle: true,
     // Class transforming to
     inTo: {
       'class': null,
       //'style': null,
-      layer: 0
+      layer: 0,
+      transition: null
     },
     // Class transforming out
     outFrom: {
       'class': null,
       //'style': null,
-      layer: 0
+      layer: 0,
+      transition: null
     },
     // Steps before the template is removed
     // XXX: We could perhaps have a timeout on this?
     steps: 1,
+    // XXX: we could calculate this from the outFrom transistion
+    // if we parse "top 1s ease-in bottom 3s" -> 3s -> 3000
     // Delay before transforming away the last screen
     delay: 0,
-  }, settings);
+  }, options);
+  
+};
 
+_goTo = function(tempName, inFromOpt, outToOpt) {
+  // Test if current is a or b
+  var self = this;
+
+  // Set default options
+  var inFrom = _defaultTransition(inFromOpt);
+  // If not set use the inFrom transition
+  var outTo = outToOpt && _defaultTransition(outToOpt) || inFrom;
+
+  // Parse the transition
+  var stepsIn = (inFrom.inTo.transition)? inFrom.inTo.transition.split('s') : [];
+  var stepsOut = (outTo.outFrom.transition)? outTo.outFrom.transition.split('s') : [];
 
   // Reverse current (make sure its booleans)
   self.a.isCurrent = !self.a.isCurrent;
   self.b.isCurrent = !self.a.isCurrent;
 
+  // Get last / current handles
   var current = (self.a.isCurrent)? self.a : self.b;
   var last = (self.b.isCurrent)? self.a : self.b;
 
+
   // Store to/from classes
-  current.inTo = options.inTo['class'] || null;
-  current.outFrom = options.outFrom['class'] || null;
-  current.steps = options.steps;
+  current.inTo = inFrom.inTo['class'] || null;
+  current.outFrom = inFrom.outFrom['class'] || null;
+  current.steps = inFrom.length;
+
+  last.inTo = outTo.inTo['class'] || null;
+  last.outFrom = outTo.outFrom['class'] || null;
+  last.steps = stepsOut.length;
+
+  // Set start
+  current.start.set(inFrom.outFrom['class']);
+  
+  last.start.set(outTo.outFrom['class']);
+
+  // Set transistions
+  current.transition.set(inFrom.inTo.transition);
+  last.transition.set(outTo.outFrom.transition);
 
   // Set the layer
-  last.layer.set(options.outFrom.layer);
-  current.layer.set(options.inTo.layer);
+  current.layer.set(inFrom.inTo.layer);
+  last.layer.set(outTo.outFrom.layer);
+
+Meteor.setTimeout(function() {
 
   // Set the template
-  if (last && last.show.get() == tempName && options.toggle) {
+  if (last && last.show.get() == tempName && inFrom.toggle) {
     // Set current to null
     self.set(null);
     // Remove the last template
@@ -161,16 +202,20 @@ _goTo = function(tempName, settings) {
     // Set the current
     self.set(tempName);
 
-    if (options.delay) {
+    // Use the outTo delay before removing the last
+    // We only delay if the transition is the same
+    if (!outToOpt && outTo.delay) {
       Meteor.setTimeout(function() {
         // Remove the last template
         last.show.set(null);
-      }, options.delay);
+      }, outTo.delay);
     } else {
       // Remove the last template
       last.show.set(null);
     }
   }
+
+}, 100);
 
 
 };
@@ -179,6 +224,7 @@ _set = function(tempName) {
   var self = this;
   // The current
   var current = (self.a.isCurrent)? self.a : self.b;
+  var last = (self.a.isCurrent)? self.b : self.a;
 
   // Extend the events with template specifics
   _.extend(self._activeEvents, self.events(tempName));
@@ -186,6 +232,7 @@ _set = function(tempName) {
   // Set the new tempate
   self.currentName.set(tempName);
   self.current.set(current);
+  self.last.set(last);
   current.show.set(tempName);   
 };
 
@@ -211,15 +258,21 @@ ViewPort = function(viewportId, defaultTemp) {
         temp: new _reactiveEntity(null),
         isCurrent: true,
         layer: new _reactiveEntity(null),
+        start: new _reactiveEntity(null),
+        transition: new _reactiveEntity(null)
       },
       'b': {
         show: new _reactiveEntity(null),
         temp: new _reactiveEntity(null),
         isCurrent: (defaultTemp)? false: true,     
         layer: new _reactiveEntity(null),
+        start: new _reactiveEntity(null),
+        transition: new _reactiveEntity(null)
       },
       // Current object
       current: new _reactiveEntity(null),
+      // Current object
+      last: new _reactiveEntity(null),
       // Current template name
       currentName: new _reactiveEntity(null),      
       // Active events
@@ -285,10 +338,23 @@ Template.screen.showlayer = function() {
   var screen = ViewPort(self.id, self.defaultTemp)[self.name];
   // Get the source 
   var layer = screen.layer.get();
+  // Get the transistion
+  var tr = screen.transition.get();
+  // create the result
+  var result = (layer === null)? '': 'z-index: ' + layer + ';';
+  // Add transition
+  result += transition(tr);
 
-  return (layer === null)? null: 'z-index: ' + layer + ';';
+  return (result === '')? null: result;
 };
 
+Template.screen.startPosition = function() {
+  var self = this;
+  // Get the screen
+  var screen = ViewPort(self.id, self.defaultTemp)[self.name];
+
+  return screen.start.get();
+};
 
 Template.screen.showcontent = function() {
   var self = this;
@@ -306,23 +372,40 @@ Template.screen.showcontent = function() {
     screen.temp.set(source && Template[source] || null);
     return screen.inTo;
   } else {
-    return screen.outFrom;
+    return null;
   }
 };
+
 
 Template.screen.events({
   'transitionend/webkitTransitionEnd/oTransitionEnd/MSTransitionEnd div': function(evt) {
     // Get screen
-    var current = ViewPort(this.id)[this.name];
+    var last = ViewPort(this.id)[this.name];
+    last && last.steps--;
+
+    var current = ViewPort(this.id).current.get();
+    ViewPort.debug && console.log('TEND EVENT:', this.id, last.isCurrent, last.steps);
 
     // None in transit
-    if (!current.isCurrent && current.temp.get()) {
-      current.steps--;
-      if (current.steps === 0) {      
-        // console.log('removed template');
+    if (last && (last.steps === 0 || isNaN(last.steps)) ) {
+
+      ViewPort.debug && console.log('END EVENT:', this.id, last.isCurrent);
+
+      if (!last.isCurrent) {
+
+        ViewPort.debug && console.log('Reset');    
+        // ViewPort.debug && console.log('removed template');
         // Remove the template contents
-        current.temp.set(null);
+        last.temp.set(null);
+
+        // Remove transition, if we want to move this later
+        last.transition.set(null);
+
       }
+
+      // Reset start
+      ViewPort.debug && console.log('start is set to null');
+      last.start.set(null);
     }
 
   }
