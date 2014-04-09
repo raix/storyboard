@@ -1,17 +1,17 @@
 
 var _reactiveEntity = function(defaultValue) {
   var self = this;
-  var value = defaultValue;
+  self.value = defaultValue;
   var dep = new Deps.Dependency();
 
   self.get = function () {
     dep.depend();
-    return value;
+    return self.value;
   };
 
   self.set = function(newValue) {
-    if (newValue !== value) {
-      value = newValue;
+    if (newValue !== self.value) {
+      self.value = newValue;
       dep.changed();
     }
   };
@@ -20,6 +20,8 @@ var _reactiveEntity = function(defaultValue) {
 var _viewports = {};
 
 Transition = {};
+
+defaultTransition = {};
 
 UI.registerHelper('Transition', Transition);
 
@@ -139,18 +141,26 @@ _defaultTransition = function(options) {
       layer: 0,
       transition: ''
     },
-    // Steps before the template is removed
-    // XXX: We could perhaps have a timeout on this?
-    // steps: 1,
-    // XXX: we could calculate this from the outFrom transistion
-    // if we parse "top 1s ease-in bottom 3s" -> 3s -> 3000
-    // Delay before transforming away the last screen
-    delay: 0,
+    delay: false,
   }, options);
   
 };
 
-_goTo = function(tempName, inFromOpt, outToOpt) {
+_setDefault = function(tempName, inFromOpt, outToOpt) {
+  var self = this;
+
+  // Set the default template and transitions
+  defaultTransition[self.id] = {
+    tempName: tempName,
+    inFrom: inFromOpt,
+    outTo: outToOpt
+  };
+
+  self.set(tempName, inFromOpt);
+
+};
+
+_goTo = function(tempNameOpt, inFromOpt, outToOpt) {
   ViewPort.debug && console.log('GOTO:', tempName, inFromOpt, outToOpt);
   // Test if current is a or b
   var self = this;
@@ -160,6 +170,33 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
   var inFrom = _defaultTransition(inFromOpt);
   // If not set use the inFrom transition
   var outTo = outToOpt && _defaultTransition(outToOpt) || self.transition && _defaultTransition(self.transition) || inFrom;
+
+
+  // Determin if we are toggling this viewport
+  var toggle = (tempNameOpt === self.currentName.value && inFrom.toggle);
+
+  // Set the tempName, depending on the toggle flag
+  var tempName = (toggle) ? null : tempNameOpt;
+
+  if (tempName === null) {
+    // Check if we have set a default transition on this one...
+    if (defaultTransition[self.id]) {
+
+      // Set new tempName
+      tempName = defaultTransition[self.id].tempName;
+
+      // Set new inFrom if set
+      if (defaultTransition[self.id].inFrom) {
+        inFrom = _defaultTransition(defaultTransition[self.id].inFrom);
+      }
+
+      // Set new outTo if set
+      if (defaultTransition[self.id].outTo) {
+        outTo = _defaultTransition(defaultTransition[self.id].outTo);
+      }
+      
+    }
+  }
 
   // Set the last transition
   self.transition = inFrom;
@@ -191,10 +228,6 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
 
   ViewPort.debug && console.log(durationIn, durationOut);
   ViewPort.debug && console.log(maxDurationIn, maxDurationOut);
-
-  // Stop events - We dont want to trigger any events while rigging the actual
-  // transition
-  self.steps = null;
 
 
   function clearTransitionTimeout() {
@@ -282,43 +315,30 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
   }
 
   function renderTransition() {    
-    // Number of transition steps before the animation is done..
-    self.steps = last.steps = stepsOut.length;
+    // Set the current
+    self.set(tempName);
 
-    // Set the template
-    if (last && last.show.get() == tempName && inFrom.toggle) {
-      // We only need steps out for this
-      //
-      ViewPort.debug && console.log('RENDER TOGGLE ', tempName);
-      current.steps = 0;
-      // Set current to null
-      self.set(null);
-      // Remove the last template
-      removeTheLastTemplate();
+    // Use the outTo delay before removing the last
+    // We only delay if the transition is the same
+    if (!outToOpt && outTo.delay) {
+
+      var delay = (outTo.delay === true)? (maxDurationIn * 1000 ) : outTo.delay;
+
+      if (toggle) delay = 0;
+
+      ViewPort.debug && console.log('RENDER DELAY ', tempName, delay, self.last.get());
+      // Remove the last template a bit delayed
+      transitionTimeout(removeTheLastTemplate, delay);
+
     } else {
 
-      // Calc steps
-      current.steps = ((tempName === null)? 0 : stepsIn.length);
-      self.steps += current.steps;
+      ViewPort.debug && console.log('RENDER DIRECTLY ', tempName, self.last.get().temp.get());
 
-      // Set the current
-      self.set(tempName);
+      // Remove the last template
+      removeTheLastTemplate();
 
-      // Use the outTo delay before removing the last
-      // We only delay if the transition is the same
-      if (!outToOpt && outTo.delay ) {
-        var delay = (outTo.delay === true)? (maxDurationIn * 1000 ) : outTo.delay;
-        ViewPort.debug && console.log('RENDER DELAY ', tempName, delay, self.last.get());
-        // Remove the last template a bit delayed
-        transitionTimeout(removeTheLastTemplate, delay);
-      } else {
-        ViewPort.debug && console.log('RENDER DIRECTLY ', tempName, self.last.get().temp.get());
-
-        // Remove the last template
-        removeTheLastTemplate();
-
-      }
     }
+    
   } // EO renderTransition
 
   // 1. Stop all transitions
@@ -346,7 +366,9 @@ _set = function(tempName, transition) {
   if (transition) {
     var t = _defaultTransition(transition);
     current.inTo = t.inTo['class'];
-    current.outFrom = t.outFrom['class'];
+
+    // Set the last transition
+    self.transition = t;
   }
 
   // Extend the events with template specifics
@@ -361,10 +383,6 @@ _set = function(tempName, transition) {
 /**
  * @method ViewPort
  * @param {string} viewportId Id of the viewport
- * @param {string | null} [tempName] Show the template
- * @param {string} [inTo] transform to class
- * @param {string} [outFrom] transform from class
- * @param {string} [steps] outFrom transform steps before template is removed
  */
 ViewPort = function(viewportId) {
   // Return the viewport object
