@@ -196,6 +196,25 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
   // transition
   self.steps = null;
 
+
+  function clearTransitionTimeout() {
+    if (self.inTransition) {
+
+      // Stop all timeouts - make sure we dont get interupted in the new animation
+      _.each(self.inTransition, function(id) {
+        // Clear the time out
+        Meteor.clearTimeout(id);
+      });
+
+    }
+    
+    self.inTransition = [];
+  }
+
+  function transitionTimeout(f, delay) {
+    self.inTransition.push(Meteor.setTimeout(f, delay));
+  }
+
   function getCurrentAndLastScreens() {
     // Reverse current (make sure its booleans)
     self.a.isCurrent = !self.a.isCurrent;
@@ -236,10 +255,8 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
   function resetTransition() {
     // var current = vp.current.get();
     // var last = vp.last.get();
-    ViewPort.debug && console.log(current, last);
 
-
-    console.log('Reset', self.id, tempName);    
+    ViewPort.debug && console.log('Reset', self.id, tempName);    
     // ViewPort.debug && console.log('removed template');
     // Remove the template contents
     last.temp.set(null);
@@ -251,17 +268,17 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
 
     // Reset start
     last.start.set(null);
-
-    self.inTransition = false;
   };
 
   function removeTheLastTemplate() {
+    self.emit('done', tempName);
+
     last.show.set(null);  
     
     // Delay until template is out
     var delay = ((maxDurationOut) * 1000 );
 
-    self.inTransition = Meteor.setTimeout(resetTransition, delay);
+    transitionTimeout(resetTransition, delay);
   }
 
   function renderTransition() {    
@@ -293,7 +310,7 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
         var delay = (outTo.delay === true)? (maxDurationIn * 1000 ) : outTo.delay;
         ViewPort.debug && console.log('RENDER DELAY ', tempName, delay, self.last.get());
         // Remove the last template a bit delayed
-        Meteor.setTimeout(removeTheLastTemplate, delay);
+        transitionTimeout(removeTheLastTemplate, delay);
       } else {
         ViewPort.debug && console.log('RENDER DIRECTLY ', tempName, self.last.get().temp.get());
 
@@ -304,21 +321,18 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
     }
   } // EO renderTransition
 
-  if (self.inTransition) {
-    // Stop the reset
-    Meteor.clearTimeout(self.inTransition);
-    self.inTransition = false;
-  }
+  // 1. Stop all transitions
+  clearTransitionTimeout();
 
-  // 1. Get the current and last screen to work with
+  // 2. Get the current and last screen to work with
   getCurrentAndLastScreens();
 
-  // 2. Render the start position for the transition
+  // 3. Render the start position for the transition
   renderStartPosition();
 
-  // 3. Delay just a bit to let DOM follow up on this before starting the
+  // 4. Delay just a bit to let DOM follow up on this before starting the
   // transition
-  Meteor.setTimeout(renderTransition, 20);
+  transitionTimeout(renderTransition, 20);
 
 };
 
@@ -398,7 +412,9 @@ ViewPort = function(viewportId) {
       // Get setter for sessions
       Session: _session,
       // Toggle session
-      toggleSession: _sessionToggle
+      toggleSession: _sessionToggle,
+      // Set default template
+      setDefault: _setDefault
     };
   }
 
