@@ -126,18 +126,18 @@ _defaultTransition = function(options) {
       'class': null,
       //'style': null,
       layer: 0,
-      transition: null
+      transition: ''
     },
     // Class transforming out
     outFrom: {
       'class': null,
       //'style': null,
       layer: 0,
-      transition: null
+      transition: ''
     },
     // Steps before the template is removed
     // XXX: We could perhaps have a timeout on this?
-    steps: 1,
+    // steps: 1,
     // XXX: we could calculate this from the outFrom transistion
     // if we parse "top 1s ease-in bottom 3s" -> 3s -> 3000
     // Delay before transforming away the last screen
@@ -147,76 +147,134 @@ _defaultTransition = function(options) {
 };
 
 _goTo = function(tempName, inFromOpt, outToOpt) {
+  ViewPort.debug && console.log('GOTO:', tempName, inFromOpt, outToOpt);
   // Test if current is a or b
   var self = this;
+  var current, last;
 
   // Set default options
   var inFrom = _defaultTransition(inFromOpt);
   // If not set use the inFrom transition
-  var outTo = outToOpt && _defaultTransition(outToOpt) || inFrom;
+  var outTo = outToOpt && _defaultTransition(outToOpt) || self.transition && _defaultTransition(self.transition) || inFrom;
+
+  // Set the last transition
+  self.transition = inFrom;
 
   // Parse the transition
-  var stepsIn = (inFrom.inTo.transition)? inFrom.inTo.transition.split('s') : [];
-  var stepsOut = (outTo.outFrom.transition)? outTo.outFrom.transition.split('s') : [];
+  var stepsIn = inFrom.inTo.transition.split('s');
+  var stepsOut = outTo.outFrom.transition.split('s');
 
-  // Reverse current (make sure its booleans)
-  self.a.isCurrent = !self.a.isCurrent;
-  self.b.isCurrent = !self.a.isCurrent;
+  // Cut the left overs
+  stepsIn.pop();
+  stepsOut.pop();
 
-  // Get last / current handles
-  var current = (self.a.isCurrent)? self.a : self.b;
-  var last = (self.b.isCurrent)? self.a : self.b;
+  var durationIn = [];
+  var durationOut = [];
 
+  // push the durations into array
+  _.each(stepsIn, function(t) {
+    durationIn.push(+t.split(' ').pop());
+  });
 
-  // Store to/from classes
-  current.inTo = inFrom.inTo['class'] || null;
-  current.outFrom = inFrom.outFrom['class'] || null;
-  current.steps = inFrom.length;
+  // push the durations into array
+  _.each(stepsOut, function(t) {
+    durationOut.push(+t.split(' ').pop());
+  });
 
-  last.inTo = outTo.inTo['class'] || null;
-  last.outFrom = outTo.outFrom['class'] || null;
-  last.steps = stepsOut.length;
+  // Calculate the max durations
+  var maxDurationIn = stepsIn.length && Math.max.apply({}, durationIn) || 0;
+  var maxDurationOut = stepsOut.length && Math.max.apply({}, durationOut) || 0;
 
-  // Set start
-  current.start.set(inFrom.outFrom['class']);
-  
-  last.start.set(outTo.outFrom['class']);
+  ViewPort.debug && console.log(durationIn, durationOut);
+  ViewPort.debug && console.log(maxDurationIn, maxDurationOut);
 
-  // Set transistions
-  current.transition.set(inFrom.inTo.transition);
-  last.transition.set(outTo.outFrom.transition);
+  // Stop events - We dont want to trigger any events while rigging the actual
+  // transition
+  self.steps = null;
 
-  // Set the layer
-  current.layer.set(inFrom.inTo.layer);
-  last.layer.set(outTo.outFrom.layer);
+  function getCurrentAndLastScreens() {
+    // Reverse current (make sure its booleans)
+    self.a.isCurrent = !self.a.isCurrent;
+    self.b.isCurrent = !self.a.isCurrent;
 
-Meteor.setTimeout(function() {
-
-  // Set the template
-  if (last && last.show.get() == tempName && inFrom.toggle) {
-    // Set current to null
-    self.set(null);
-    // Remove the last template
-    last.show.set(null);
-  } else {
-    // Set the current
-    self.set(tempName);
-
-    // Use the outTo delay before removing the last
-    // We only delay if the transition is the same
-    if (!outToOpt && outTo.delay) {
-      Meteor.setTimeout(function() {
-        // Remove the last template
-        last.show.set(null);
-      }, outTo.delay);
-    } else {
-      // Remove the last template
-      last.show.set(null);
-    }
+    // Get last / current handles
+    current = (self.a.isCurrent)? self.a : self.b;
+    last = (self.b.isCurrent)? self.a : self.b;
   }
 
-}, 100);
+  function renderStartPosition() {  
+    // Store to/from classes
+    current.inTo = inFrom.inTo['class'];
+    current.outFrom = inFrom.outFrom['class'];
 
+    last.inTo = outTo.inTo['class'];
+    last.outFrom = outTo.outFrom['class'];
+
+    // Set start
+    last.start.set(last.outFrom);
+    current.start.set(current.outFrom);  
+
+    // Set the layer
+    current.layer.set(inFrom.inTo.layer);
+    last.layer.set(outTo.outFrom.layer);
+
+    // Set transistions
+    current.transition.set(inFrom.inTo.transition);
+    last.transition.set(outTo.outFrom.transition);
+  };
+
+  function removeTheLastTemplate() {
+    last.show.set(null);  
+  }
+
+  function renderTransition() {    
+    // Number of transition steps before the animation is done..
+    self.steps = last.steps = stepsOut.length;
+
+    // Set the template
+    if (last && last.show.get() == tempName && inFrom.toggle) {
+      // We only need steps out for this
+      //
+      current.steps = 0; 
+      // Set current to null
+      self.set(null);
+      // Remove the last template
+      removeTheLastTemplate();
+    } else {
+
+      // Calc steps
+      current.steps = ((tempName === null)? 0 : stepsIn.length);
+      self.steps += current.steps;
+
+      // Set the current
+      self.set(tempName);
+
+      // Use the outTo delay before removing the last
+      // We only delay if the transition is the same
+      if (!outToOpt && outTo.delay) {
+        var delay = (outTo.delay === true)? (maxDurationOut * 1000 ) : outTo.delay;
+
+        // Remove the last template a bit delayed
+        Meteor.setTimeout(removeTheLastTemplate, delay);
+
+      } else {
+
+        // Remove the last template
+        removeTheLastTemplate();
+
+      }
+    }
+  } // EO renderTransition
+
+  // 1. Get the current and last screen to work with
+  getCurrentAndLastScreens();
+
+  // 2. Render the start position for the transition
+  renderStartPosition();
+
+  // 3. Delay just a bit to let DOM follow up on this before starting the
+  // transition
+  Meteor.setTimeout(renderTransition, 10);
 
 };
 
@@ -228,15 +286,12 @@ _set = function(tempName) {
 
   // Extend the events with template specifics
   _.extend(self._activeEvents, self.events(tempName));
-
-  // Set the new tempate
-  self.currentName.set(tempName);
-  self.current.set(current);
-  self.last.set(last);
-  current.show.set(tempName);   
+    // Set the new tempate
+    self.currentName.set(tempName);
+    self.current.set(current);
+    self.last.set(last);
+    current.show.set(tempName);
 };
-
-// TODO: _current return the current?
 
 /**
  * @method ViewPort
@@ -372,41 +427,60 @@ Template.screen.showcontent = function() {
     screen.temp.set(source && Template[source] || null);
     return screen.inTo;
   } else {
-    return null;
+    return screen.outTo;
   }
 };
 
+_resetView = function(id, name, timeout) {
+
+  // Get screen
+  var vp = ViewPort(id);
+
+  if (vp.steps !== null) {
+
+    // We decrease the viewport counter for transition steps
+    vp && vp.steps && vp.steps--;
+
+    var that = vp[name];
+    // We also decrease the screen counter for transition steps
+    that && that.steps && that.steps--;
+
+    // XXX: emit events
+    //if (that && that.steps === 0) console.log('++++ END EVENT', name);
+
+    ViewPort.debug && console.log('VP STEPS', vp.steps);
+    
+    if (vp && vp.steps === 0) ViewPort.debug && console.log('++++ END EVENT');
+
+    // None in transit
+    if (vp && vp.steps === 0 || (timeout && vp && vp.steps !== 0)) {
+      var current = vp.current.get();
+      var last = vp.last.get();
+      ViewPort.debug && console.log(current, last);
+
+
+      ViewPort.debug && console.log('Reset');    
+      // ViewPort.debug && console.log('removed template');
+      // Remove the template contents
+      last.temp.set(null);
+
+      // Remove transition, if we want to move later
+      last.transition.set(null);
+      current.transition.set(null);
+
+      // Reset start
+      last.start.set(null);
+      current.start.set(null);
+
+    }
+
+
+  }
+};
 
 Template.screen.events({
   'transitionend/webkitTransitionEnd/oTransitionEnd/MSTransitionEnd div': function(evt) {
-    // Get screen
-    var last = ViewPort(this.id)[this.name];
-    last && last.steps--;
-
-    var current = ViewPort(this.id).current.get();
-    ViewPort.debug && console.log('TEND EVENT:', this.id, last.isCurrent, last.steps);
-
-    // None in transit
-    if (last && (last.steps === 0 || isNaN(last.steps)) ) {
-
-      ViewPort.debug && console.log('END EVENT:', this.id, last.isCurrent);
-
-      if (!last.isCurrent) {
-
-        ViewPort.debug && console.log('Reset');    
-        // ViewPort.debug && console.log('removed template');
-        // Remove the template contents
-        last.temp.set(null);
-
-        // Remove transition, if we want to move this later
-        last.transition.set(null);
-
-      }
-
-      // Reset start
-      ViewPort.debug && console.log('start is set to null');
-      last.start.set(null);
-    }
-
+    ViewPort.debug && console.log('transitionend');
+    _resetView(this.id, this.name);
   }
 });
