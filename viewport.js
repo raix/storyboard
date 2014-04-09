@@ -19,6 +19,10 @@ var _reactiveEntity = function(defaultValue) {
 
 var _viewports = {};
 
+Transition = {};
+
+UI.registerHelper('Transition', Transition);
+
 var transition = function(value) {
   if (!value) return '';
 
@@ -197,9 +201,15 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
     self.a.isCurrent = !self.a.isCurrent;
     self.b.isCurrent = !self.a.isCurrent;
 
+
     // Get last / current handles
-    current = (self.a.isCurrent)? self.a : self.b;
-    last = (self.b.isCurrent)? self.a : self.b;
+    if (self.a.isCurrent) {
+      current = self.a;
+      last = self.b;
+    } else {
+      current = self.b;
+      last = self.a;
+    }
   }
 
   function renderStartPosition() {  
@@ -223,8 +233,35 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
     last.transition.set(outTo.outFrom.transition);
   };
 
+  function resetTransition() {
+    // var current = vp.current.get();
+    // var last = vp.last.get();
+    ViewPort.debug && console.log(current, last);
+
+
+    console.log('Reset', self.id, tempName);    
+    // ViewPort.debug && console.log('removed template');
+    // Remove the template contents
+    last.temp.set(null);
+
+    // Remove transition, if we want to move later
+    // XXX: Note these does not make the big difference
+    // last.transition.set(null);
+    // current.transition.set(null);
+
+    // Reset start
+    last.start.set(null);
+
+    self.inTransition = false;
+  };
+
   function removeTheLastTemplate() {
     last.show.set(null);  
+    
+    // Delay until template is out
+    var delay = ((maxDurationOut) * 1000 );
+
+    self.inTransition = Meteor.setTimeout(resetTransition, delay);
   }
 
   function renderTransition() {    
@@ -235,7 +272,8 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
     if (last && last.show.get() == tempName && inFrom.toggle) {
       // We only need steps out for this
       //
-      current.steps = 0; 
+      ViewPort.debug && console.log('RENDER TOGGLE ', tempName);
+      current.steps = 0;
       // Set current to null
       self.set(null);
       // Remove the last template
@@ -251,13 +289,13 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
 
       // Use the outTo delay before removing the last
       // We only delay if the transition is the same
-      if (!outToOpt && outTo.delay) {
-        var delay = (outTo.delay === true)? (maxDurationOut * 1000 ) : outTo.delay;
-
+      if (!outToOpt && outTo.delay ) {
+        var delay = (outTo.delay === true)? (maxDurationIn * 1000 ) : outTo.delay;
+        ViewPort.debug && console.log('RENDER DELAY ', tempName, delay, self.last.get());
         // Remove the last template a bit delayed
         Meteor.setTimeout(removeTheLastTemplate, delay);
-
       } else {
+        ViewPort.debug && console.log('RENDER DIRECTLY ', tempName, self.last.get().temp.get());
 
         // Remove the last template
         removeTheLastTemplate();
@@ -265,6 +303,12 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
       }
     }
   } // EO renderTransition
+
+  if (self.inTransition) {
+    // Stop the reset
+    Meteor.clearTimeout(self.inTransition);
+    self.inTransition = false;
+  }
 
   // 1. Get the current and last screen to work with
   getCurrentAndLastScreens();
@@ -274,15 +318,22 @@ _goTo = function(tempName, inFromOpt, outToOpt) {
 
   // 3. Delay just a bit to let DOM follow up on this before starting the
   // transition
-  Meteor.setTimeout(renderTransition, 10);
+  Meteor.setTimeout(renderTransition, 20);
 
 };
 
-_set = function(tempName) {
+_set = function(tempName, transition) {
   var self = this;
   // The current
   var current = (self.a.isCurrent)? self.a : self.b;
   var last = (self.a.isCurrent)? self.b : self.a;
+
+  // We could be setting the basics for this viewport
+  if (transition) {
+    var t = _defaultTransition(transition);
+    current.inTo = t.inTo['class'];
+    current.outFrom = t.outFrom['class'];
+  }
 
   // Extend the events with template specifics
   _.extend(self._activeEvents, self.events(tempName));
@@ -301,7 +352,7 @@ _set = function(tempName) {
  * @param {string} [outFrom] transform from class
  * @param {string} [steps] outFrom transform steps before template is removed
  */
-ViewPort = function(viewportId, defaultTemp) {
+ViewPort = function(viewportId) {
   // Return the viewport object
   if (typeof _viewports[viewportId] !== 'undefined') {
     return _viewports[viewportId];
@@ -309,7 +360,7 @@ ViewPort = function(viewportId, defaultTemp) {
     return _viewports[viewportId] = {
       id: viewportId,
       'a': {
-        show: new _reactiveEntity(defaultTemp || null),
+        show: new _reactiveEntity(null),
         temp: new _reactiveEntity(null),
         isCurrent: true,
         layer: new _reactiveEntity(null),
@@ -319,7 +370,7 @@ ViewPort = function(viewportId, defaultTemp) {
       'b': {
         show: new _reactiveEntity(null),
         temp: new _reactiveEntity(null),
-        isCurrent: (defaultTemp)? false: true,     
+        isCurrent: false,     
         layer: new _reactiveEntity(null),
         start: new _reactiveEntity(null),
         transition: new _reactiveEntity(null)
@@ -390,7 +441,7 @@ Template.screen.content = function() {
 Template.screen.showlayer = function() {
   var self = this;
   // Get the screen
-  var screen = ViewPort(self.id, self.defaultTemp)[self.name];
+  var screen = ViewPort(self.id)[self.name];
   // Get the source 
   var layer = screen.layer.get();
   // Get the transistion
@@ -406,7 +457,7 @@ Template.screen.showlayer = function() {
 Template.screen.startPosition = function() {
   var self = this;
   // Get the screen
-  var screen = ViewPort(self.id, self.defaultTemp)[self.name];
+  var screen = ViewPort(self.id)[self.name];
 
   return screen.start.get();
 };
@@ -414,7 +465,7 @@ Template.screen.startPosition = function() {
 Template.screen.showcontent = function() {
   var self = this;
   // Get the screen
-  var screen = ViewPort(self.id, self.defaultTemp)[self.name];
+  var screen = ViewPort(self.id)[self.name];
   // Get the source 
   var source = screen.show.get();
 
@@ -427,60 +478,6 @@ Template.screen.showcontent = function() {
     screen.temp.set(source && Template[source] || null);
     return screen.inTo;
   } else {
-    return screen.outTo;
+    return null; // screen.outFrom;
   }
 };
-
-_resetView = function(id, name, timeout) {
-
-  // Get screen
-  var vp = ViewPort(id);
-
-  if (vp.steps !== null) {
-
-    // We decrease the viewport counter for transition steps
-    vp && vp.steps && vp.steps--;
-
-    var that = vp[name];
-    // We also decrease the screen counter for transition steps
-    that && that.steps && that.steps--;
-
-    // XXX: emit events
-    //if (that && that.steps === 0) console.log('++++ END EVENT', name);
-
-    ViewPort.debug && console.log('VP STEPS', vp.steps);
-    
-    if (vp && vp.steps === 0) ViewPort.debug && console.log('++++ END EVENT');
-
-    // None in transit
-    if (vp && vp.steps === 0 || (timeout && vp && vp.steps !== 0)) {
-      var current = vp.current.get();
-      var last = vp.last.get();
-      ViewPort.debug && console.log(current, last);
-
-
-      ViewPort.debug && console.log('Reset');    
-      // ViewPort.debug && console.log('removed template');
-      // Remove the template contents
-      last.temp.set(null);
-
-      // Remove transition, if we want to move later
-      last.transition.set(null);
-      current.transition.set(null);
-
-      // Reset start
-      last.start.set(null);
-      current.start.set(null);
-
-    }
-
-
-  }
-};
-
-Template.screen.events({
-  'transitionend/webkitTransitionEnd/oTransitionEnd/MSTransitionEnd div': function(evt) {
-    ViewPort.debug && console.log('transitionend');
-    _resetView(this.id, this.name);
-  }
-});

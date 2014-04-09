@@ -10,6 +10,7 @@ Package.on_use(function(api) {
     'viewport.js',
   ], 'client');
   api.export('ViewPort');
+  api.export('Transition');
 });
 
 Package.on_test(function(api) {
