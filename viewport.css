@@ -1,0 +1,13 @@
+.viewport-fast {
+    -webkit-transform-style: preserve-3d;
+    transform-style: preserve-3d;
+
+    -webkit-backface-visibility: visible;
+    backface-visibility: visible;
+
+    -webkit-font-smoothing: antialiased;
+    /*-webkit-tap-highlight-color: transparent;*/
+
+    -webkit-perspective: 0;
+    perspective: none;    
+}
