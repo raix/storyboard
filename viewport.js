@@ -185,6 +185,10 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
       // Set new tempName
       tempName = defaultTransition[self.id].tempName;
 
+      // Check to see if we are already on the default template
+      if (self.currentName.value === tempName)
+        return;
+
       // Set new inFrom if set
       if (defaultTransition[self.id].inFrom) {
         inFrom = _defaultTransition(defaultTransition[self.id].inFrom);
@@ -196,6 +200,7 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
       }
       
     }
+
   }
 
   // Set the last transition
