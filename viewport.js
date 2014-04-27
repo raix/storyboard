@@ -167,9 +167,10 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
   var current, last;
 
   // Set default options
-  var inFrom = _defaultTransition(inFromOpt);
+  var inFrom = _defaultTransition(inFromOpt || self.transition);
+
   // If not set use the inFrom transition
-  var outTo = outToOpt && _defaultTransition(outToOpt) || self.transition && _defaultTransition(self.transition) || inFrom;
+  var outTo = _defaultTransition(outToOpt || self.transition || inFrom);
 
 
   // Determin if we are toggling this viewport
