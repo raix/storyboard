@@ -204,6 +204,13 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
 
   }
 
+  // If we want to set null when already on null then skip this action
+  // pure cpu overhead
+  if (tempName === null && self.currentName.value === null)
+   return;
+
+  self.emit('goingTo', tempName);
+
   // Set the last transition
   self.transition = inFrom;
 
@@ -289,6 +296,12 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
     // Set transistions
     current.transition.set(inFrom.inTo.transition);
     last.transition.set(outTo.outFrom.transition);
+
+    // Render the template before showing the transition
+    if (tempName) {
+      // Set the template
+      current.temp.set(tempName && Template[tempName]);    
+    }
   };
 
   function resetTransition() {
@@ -312,7 +325,7 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
   function removeTheLastTemplate() {
     self.emit('done', tempName);
 
-    last.show.set(null);  
+    last.show.set(null);
     
     // Delay until template is out
     var delay = ((maxDurationOut) * 1000 );
@@ -383,6 +396,12 @@ _set = function(tempName, transition) {
     self.currentName.set(tempName);
     self.current.set(current);
     self.last.set(last);
+
+    // Render the template before showing the transition
+    if (tempName) {
+      current.temp.set(tempName && Template[tempName]);
+    }
+
     current.show.set(tempName);
 };
 
@@ -474,8 +493,10 @@ Template.screen.Session = function(name) {
 };
 
 Template.screen.content = function() {
+  var template = ViewPort(this.id)[this.name].temp.get();
   // If source then return the template else return null
-  return ViewPort(this.id)[this.name].temp.get();
+  ViewPort.debug && console.log('TEMPLATE', ((template===null)?'REMOVE':'RENDER'), this.id, this.name);
+  return (template === null) ? null : template;
 };
 
 Template.screen.showlayer = function() {
@@ -514,10 +535,11 @@ Template.screen.showcontent = function() {
       // If template dont have a Session helper we add one
       Template[source].Session = Template.screen.Session;
     }
-    // Show the template
-    screen.temp.set(source && Template[source] || null);
+
+    ViewPort.debug && console.log('TEMPLATE SET STYLE', this.id, this.name, source);
     return screen.inTo;
   } else {
+    ViewPort.debug && console.log('TEMPLATE UNSET STYLE', this.id, this.name);
     return null; // screen.outFrom;
   }
 };
