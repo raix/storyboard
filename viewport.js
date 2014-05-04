@@ -298,7 +298,7 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
     last.transition.set(outTo.outFrom.transition);
 
     // Render the template before showing the transition
-    if (tempName) {
+    if (tempName !== current.show.value) {
       // Set the template
       current.temp.set(tempName && Template[tempName]);    
     }
@@ -398,7 +398,7 @@ _set = function(tempName, transition) {
     self.last.set(last);
 
     // Render the template before showing the transition
-    if (tempName) {
+    if (current.show.value !== tempName) {
       current.temp.set(tempName && Template[tempName]);
     }
 
