@@ -160,7 +160,7 @@ _setDefault = function(tempName, inFromOpt, outToOpt) {
 
 };
 
-_goTo = function(tempNameOpt, inFromOpt, outToOpt) {
+_goTo = function(tempNameOpt, inFromOpt, outToOpt, toggleOpt) {
   ViewPort.debug && console.log('GOTO:', tempName, inFromOpt, outToOpt);
   // Test if current is a or b
   var self = this;
@@ -174,7 +174,9 @@ _goTo = function(tempNameOpt, inFromOpt, outToOpt) {
 
 
   // Determin if we are toggling this viewport
-  var toggle = (tempNameOpt === self.currentName.value && inFrom.toggle);
+  if (toggleOpt !== false) {
+    var toggle = (tempNameOpt === self.currentName.value && inFrom.toggle);
+  }
 
   // Set the tempName, depending on the toggle flag
   var tempName = (toggle) ? null : tempNameOpt;
