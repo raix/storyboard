@@ -1,16 +1,17 @@
 Package.describe({
+  git: 'https://github.com/raix/storyboard.git',
   name: 'raix:storyboard',
   version: '0.0.1',
   summary: "Adds the concepts of Storyboard, Viewports and Screens"
 });
 
-Package.on_use(function(api) {
+Package.onUse(function(api) {
   if (api.versionsFrom) {
 
     api.versionsFrom('1.0');
 
     api.use(['ui', 'templating', 'session', 'underscore', 'deps']);
-    api.add_files([
+    api.addFiles([
       'viewport.css',
       'viewport.html',
       'viewport.js',
@@ -21,7 +22,7 @@ Package.on_use(function(api) {
   } else {
 
     api.use(['ui', 'templating', 'session', 'underscore', 'deps']);
-    api.add_files([
+    api.addFiles([
       'viewport.css',
       'viewport.html',
       'viewport.js',
@@ -32,6 +33,6 @@ Package.on_use(function(api) {
   }
 });
 
-Package.on_test(function(api) {
+Package.onTest(function(api) {
 
 });
