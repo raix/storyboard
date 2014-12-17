@@ -1,7 +1,7 @@
 Package.describe({
   git: 'https://github.com/raix/storyboard.git',
   name: 'raix:storyboard',
-  version: '0.0.1',
+  version: '0.0.2',
   summary: "Adds the concepts of Storyboard, Viewports and Screens"
 });
 
