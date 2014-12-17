@@ -488,60 +488,59 @@ ViewPort.emit = function() {
   });
 };
 
-Template.screen.Session = function(name) {
-  // If source then return the template else return null
-  // XXX: Bugger this cant be passed down... we mount it directly
-  return ViewPort(this.id).Session(name);
-};
+Template.screen.helpers({
 
-Template.screen.content = function() {
-  var template = ViewPort(this.id)[this.name].temp.get();
-  // If source then return the template else return null
-  ViewPort.debug && console.log('TEMPLATE', ((template===null)?'REMOVE':'RENDER'), this.id, this.name);
-  return (template === null) ? null : template;
-};
+  Session: function(name) {
+    // If source then return the template else return null
+    // XXX: Bugger this cant be passed down... we mount it directly
+    return ViewPort(this.id).Session(name);
+  },
+  content: function() {
+    var template = ViewPort(this.id)[this.name].temp.get();
+    // If source then return the template else return null
+    ViewPort.debug && console.log('TEMPLATE', ((template===null)?'REMOVE':'RENDER'), this.id, this.name);
+    return (template === null) ? null : template;
+  },
+  showlayer: function() {
+    var self = this;
+    // Get the screen
+    var screen = ViewPort(self.id)[self.name];
+    // Get the source 
+    var layer = screen.layer.get();
+    // Get the transistion
+    var tr = screen.transition.get();
+    // create the result
+    var result = (layer === null)? '': 'z-index: ' + layer + ';';
+    // Add transition
+    result += transition(tr);
 
-Template.screen.showlayer = function() {
-  var self = this;
-  // Get the screen
-  var screen = ViewPort(self.id)[self.name];
-  // Get the source 
-  var layer = screen.layer.get();
-  // Get the transistion
-  var tr = screen.transition.get();
-  // create the result
-  var result = (layer === null)? '': 'z-index: ' + layer + ';';
-  // Add transition
-  result += transition(tr);
+    return (result === '')? null: result;
+  },
+  startPosition: function() {
+    var self = this;
+    // Get the screen
+    var screen = ViewPort(self.id)[self.name];
 
-  return (result === '')? null: result;
-};
+    return screen.start.get();
+  },
+  showcontent: function() {
+    var self = this;
+    // Get the screen
+    var screen = ViewPort(self.id)[self.name];
+    // Get the source 
+    var source = screen.show.get();
 
-Template.screen.startPosition = function() {
-  var self = this;
-  // Get the screen
-  var screen = ViewPort(self.id)[self.name];
+    if (source) {
+      if (source && Template[source] && !Template[source].Session) {
+        // If template dont have a Session helper we add one
+        Template[source].Session = Template.screen.Session;
+      }
 
-  return screen.start.get();
-};
-
-Template.screen.showcontent = function() {
-  var self = this;
-  // Get the screen
-  var screen = ViewPort(self.id)[self.name];
-  // Get the source 
-  var source = screen.show.get();
-
-  if (source) {
-    if (source && Template[source] && !Template[source].Session) {
-      // If template dont have a Session helper we add one
-      Template[source].Session = Template.screen.Session;
+      ViewPort.debug && console.log('TEMPLATE SET STYLE', this.id, this.name, source);
+      return screen.inTo;
+    } else {
+      ViewPort.debug && console.log('TEMPLATE UNSET STYLE', this.id, this.name);
+      return null; // screen.outFrom;
     }
-
-    ViewPort.debug && console.log('TEMPLATE SET STYLE', this.id, this.name, source);
-    return screen.inTo;
-  } else {
-    ViewPort.debug && console.log('TEMPLATE UNSET STYLE', this.id, this.name);
-    return null; // screen.outFrom;
   }
-};
+});
